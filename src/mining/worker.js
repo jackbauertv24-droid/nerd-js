@@ -22,7 +22,6 @@ function mine(data) {
     const midstate = computeMidstate(first64);
     
     const last16Buffer = Buffer.from(last16);
-    const hashCount = 0;
     const startTime = Date.now();
     
     for (let nonce = nonceStart; nonce < nonceEnd && running; nonce++) {
@@ -32,8 +31,7 @@ function mine(data) {
         
         if (checkHashAgainstTarget(hash, target)) {
             const diff = calculateShareDifficulty(hash);
-            const nonceHex = bufferToHex(Buffer.alloc(4).fill(nonce, 0, 4, 'hex') || uint32LEToHex(nonce));
-            
+
             parentPort.postMessage({
                 type: 'share',
                 data: {
@@ -77,11 +75,5 @@ function mine(data) {
 function nonceToHex(nonce) {
     const buf = Buffer.alloc(4);
     buf.writeUInt32LE(nonce, 0);
-    return buf.toString('hex');
-}
-
-function uint32LEToHex(n) {
-    const buf = Buffer.alloc(4);
-    buf.writeUInt32LE(n, 0);
     return buf.toString('hex');
 }

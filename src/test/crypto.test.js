@@ -49,12 +49,14 @@ const targetHex = target.toString('hex').padStart(64, '0');
 
 // For bits 0x1d00ffff:
 // exponent = 0x1d = 29, coefficient = 0x00ffff
-// target = 0x00ffff * 2^(8*26) = 0x00000000ffff0000000000000000000000000000000000000000000000000000
+// target = 0x00ffff * 2^(8*26) = 0x00000000ffff000000000000000000000000000000000000000000000000000
+// We store target as little-endian, so reverse the byte order
 const expectedTarget = '00000000ffff0000000000000000000000000000000000000000000000000000';
+const expectedTargetLE = Buffer.from(expectedTarget, 'hex').reverse().toString('hex').padStart(64, '0');
 console.log('Bits:', genesisBlock.bits);
 console.log('Target:', targetHex);
-console.log('Expected:', expectedTarget);
-console.log('Match:', targetHex === expectedTarget ? '✓ PASS' : '✗ FAIL');
+console.log('Expected (little-endian):', expectedTargetLE);
+console.log('Match:', targetHex === expectedTargetLE ? '✓ PASS' : '✗ FAIL');
 
 // Test 4: Difficulty to target
 console.log('\nTest 4: Difficulty to target');

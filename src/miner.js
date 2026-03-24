@@ -221,7 +221,7 @@ export class Miner {
                     const result = await this.stratumClient.submit(
                         job.jobId,
                         job.extranonce2,
-                        job.ntime,
+                        parseInt(job.ntime, 16),
                         nonceHex
                     );
                     

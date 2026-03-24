@@ -29,24 +29,33 @@ export function uint32BE(n) {
 export function bitsToTarget(nbitsHex) {
     const nbits = Buffer.from(nbitsHex, 'hex');
     const exponent = nbits[0];
-    const mantissa = nbits.slice(1);
+    const mantissa = (nbits[1] << 16) | (nbits[2] << 8) | nbits[3];
     
     const target = Buffer.alloc(32, 0);
     
     if (exponent <= 3) {
-        for (let i = 0; i < exponent; i++) {
-            target[i] = mantissa[2 - i];
+        let val = mantissa >> (8 * (3 - exponent));
+        for (let i = 31; i >= 0 && val > 0; i--) {
+            target[i] = val & 0xff;
+            val >>= 8;
         }
     } else {
-        const offset = exponent - 3;
-        for (let i = 0; i < 3; i++) {
-            if (offset + i < 32) {
-                target[offset + i] = mantissa[i];
-            }
+        const shift = exponent - 3;
+        const mantissaBytes = [
+            (mantissa >> 16) & 0xff,
+            (mantissa >> 8) & 0xff,
+            mantissa & 0xff
+        ];
+        
+        const startPos = 32 - shift - 3;
+        if (startPos >= 0 && startPos < 29) {
+            target[startPos] = mantissaBytes[0];
+            target[startPos + 1] = mantissaBytes[1];
+            target[startPos + 2] = mantissaBytes[2];
         }
     }
     
-    return target.reverse();
+    return target;
 }
 
 export function targetToDifficulty(target) {
@@ -65,7 +74,10 @@ export function targetToDifficulty(target) {
 export function difficultyToTarget(difficulty) {
     const TRUE_DIFF_ONE = BigInt('0x00000000ffff0000000000000000000000000000000000000000000000000000');
     
-    const targetBig = TRUE_DIFF_ONE / BigInt(Math.floor(difficulty * 65536));
+    // target = max_target / difficulty
+    // Use scaled arithmetic to handle floating point
+    const scaledDiff = Math.round(difficulty * 1e15);
+    const targetBig = TRUE_DIFF_ONE * BigInt(1e15) / BigInt(scaledDiff);
     const targetHex = targetBig.toString(16).padStart(64, '0');
     
     return Buffer.from(targetHex, 'hex');

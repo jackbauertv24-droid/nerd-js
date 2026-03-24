@@ -1,5 +1,18 @@
 import { doubleSHA256 } from '../crypto/sha256.js';
-import { hexToLE, bufferToHex, uint32LE } from '../crypto/utils.js';
+import { uint32LE } from '../crypto/utils.js';
+
+function wordSwap4(buf) {
+    const result = Buffer.from(buf);
+    for (let i = 0; i < result.length; i += 4) {
+        const temp0 = result[i];
+        const temp1 = result[i + 1];
+        result[i] = result[i + 3];
+        result[i + 1] = result[i + 2];
+        result[i + 2] = temp1;
+        result[i + 3] = temp0;
+    }
+    return result;
+}
 
 export function buildCoinbase(coinb1, extranonce1, extranonce2, coinb2) {
     const coinb1Buf = Buffer.from(coinb1, 'hex');
@@ -23,13 +36,22 @@ export function computeMerkleRoot(coinbaseTx, merkleBranch) {
 }
 
 export function buildBlockHeader(version, prevHash, merkleRoot, ntime, nbits, nonce) {
-    const versionBuf = Buffer.alloc(4);
-    versionBuf.writeInt32LE(parseInt(version, 16), 0);
+    // Version: 4 bytes, convert from hex and reverse (LE)
+    const versionBuf = Buffer.from(version, 'hex').reverse();
     
-    const prevHashBuf = hexToLE(prevHash);
+    // PrevHash: 32 bytes, convert from hex and 4-byte word swap
+    const prevHashBuf = wordSwap4(Buffer.from(prevHash, 'hex'));
+    
+    // MerkleRoot: 32 bytes, use directly (from SHA256, already in correct format)
     const merkleRootBuf = merkleRoot;
-    const ntimeBuf = Buffer.from(ntime, 'hex');
-    const nbitsBuf = hexToLE(nbits);
+    
+    // Ntime: 4 bytes, convert from hex and reverse (LE)
+    const ntimeBuf = Buffer.from(ntime, 'hex').reverse();
+    
+    // Nbits: 4 bytes, convert from hex and reverse (LE)
+    const nbitsBuf = Buffer.from(nbits, 'hex').reverse();
+    
+    // Nonce: 4 bytes, write as LE
     const nonceBuf = uint32LE(nonce);
     
     return Buffer.concat([
@@ -44,7 +66,7 @@ export function buildBlockHeader(version, prevHash, merkleRoot, ntime, nbits, no
 
 export function generateExtranonce2(size) {
     const buf = Buffer.alloc(size, 0);
-    return bufferToHex(buf);
+    return buf.toString('hex');
 }
 
 export function incrementExtranonce2(extranonce2Hex) {
@@ -58,7 +80,7 @@ export function incrementExtranonce2(extranonce2Hex) {
         buf[i] = 0;
     }
     
-    return bufferToHex(buf);
+    return buf.toString('hex');
 }
 
 export function prepareMiningJob(job, extranonce1, extranonce2Size) {

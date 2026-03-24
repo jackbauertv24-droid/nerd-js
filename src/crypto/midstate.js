@@ -124,10 +124,11 @@ export function sha256FromMidstate(midstate, data16) {
     }
     
     W[4] = 0x80000000;
-    for (let i = 5; i < 15; i++) {
+    for (let i = 5; i < 14; i++) {
         W[i] = 0;
     }
-    W[15] = 512;
+    W[14] = 0;
+    W[15] = 640;
     
     for (let i = 16; i < 64; i++) {
         W[i] = (gamma1(W[i - 2]) + W[i - 7] + gamma0(W[i - 15]) + W[i - 16]) >>> 0;

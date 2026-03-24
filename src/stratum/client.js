@@ -147,7 +147,14 @@ export class StratumClient extends EventEmitter {
         const msg = buildSubmit(workerName, jobId, extranonce2, ntime, nonce);
         const response = await this.send(msg);
         
-        return response.result === true;
+        if (response.result === true) {
+            return { accepted: true };
+        } else {
+            return { 
+                accepted: false, 
+                error: response.error 
+            };
+        }
     }
     
     disconnect() {

@@ -83,6 +83,15 @@ export class Miner {
             logDifficulty(difficulty);
             this.stats.difficulty = difficulty;
             this.jobManager.setDifficulty(difficulty);
+            
+            // Restart workers with new target if they're running
+            if (this.workers.length > 0) {
+                const currentJob = this.jobManager.getCurrentJob();
+                if (currentJob) {
+                    this.stopWorkers();
+                    this.startWorkers(currentJob);
+                }
+            }
         });
         
         try {
@@ -141,7 +150,14 @@ export class Miner {
         const miningJob = this.jobManager.createJob(job);
         this.currentJobId = job.jobId;
         
-        this.startWorkers(miningJob);
+        // Small delay to allow difficulty message to arrive
+        setTimeout(() => {
+            // Refresh job target in case difficulty was updated
+            const currentJob = this.jobManager.getCurrentJob();
+            if (currentJob && currentJob.jobId === job.jobId) {
+                this.startWorkers(currentJob);
+            }
+        }, 100);
     }
     
     startWorkers(job) {
@@ -202,18 +218,18 @@ export class Miner {
             const job = this.jobManager.getCurrentJob();
             if (job) {
                 try {
-                    const accepted = await this.stratumClient.submit(
+                    const result = await this.stratumClient.submit(
                         job.jobId,
                         job.extranonce2,
                         job.ntime,
                         nonceHex
                     );
                     
-                    logShare(difficulty, accepted);
-                    
-                    if (accepted) {
+                    if (result.accepted) {
+                        logShare(difficulty, true);
                         this.stats.acceptedShares++;
                     } else {
+                        logError(`Share rejected: ${JSON.stringify(result.error)}`);
                         this.stats.rejectedShares++;
                     }
                 } catch (err) {

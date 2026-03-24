@@ -7,7 +7,7 @@ export class JobManager {
         this.extranonce1 = '';
         this.extranonce2Size = 4;
         this.difficulty = 0.0001;
-        this.target = null;
+        this.poolTarget = null;
     }
     
     setExtranonce(extranonce1, extranonce2Size) {
@@ -17,7 +17,12 @@ export class JobManager {
     
     setDifficulty(difficulty) {
         this.difficulty = difficulty;
-        this.target = difficultyToTarget(difficulty);
+        this.poolTarget = difficultyToTarget(difficulty);
+        
+        // Update current job's target if it exists
+        if (this.currentJob) {
+            this.currentJob.target = this.poolTarget;
+        }
     }
     
     createJob(stratumJob) {
@@ -27,13 +32,12 @@ export class JobManager {
             this.extranonce2Size
         );
         
-        if (!this.target) {
-            this.target = bitsToTarget(stratumJob.nbits);
-        }
+        // Use pool target if available, otherwise compute from nbits
+        const target = this.poolTarget || bitsToTarget(stratumJob.nbits);
         
         this.currentJob = {
             ...miningJob,
-            target: this.target,
+            target: target,
             nbits: stratumJob.nbits,
             cleanJobs: stratumJob.cleanJobs
         };

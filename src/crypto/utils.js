@@ -61,7 +61,9 @@ export function bitsToTarget(nbitsHex) {
 export function targetToDifficulty(target) {
     const TRUE_DIFF_ONE = BigInt('0x00000000ffff0000000000000000000000000000000000000000000000000000');
     
-    let targetBig = BigInt('0x' + target.toString('hex') || '0');
+    // Target is stored as little-endian in buffer, reverse to big-endian for correct BigInt conversion
+    const targetHexBE = Buffer.from(target).reverse().toString('hex');
+    let targetBig = BigInt('0x' + targetHexBE || '0');
     
     if (targetBig === 0n) {
         targetBig = 1n;
@@ -80,7 +82,8 @@ export function difficultyToTarget(difficulty) {
     const targetBig = TRUE_DIFF_ONE * BigInt(1e15) / BigInt(scaledDiff);
     const targetHex = targetBig.toString(16).padStart(64, '0');
     
-    return Buffer.from(targetHex, 'hex');
+    // Convert to buffer as little-endian (reverse byte order) to match how bitsToTarget works
+    return Buffer.from(targetHex, 'hex').reverse();
 }
 
 export function checkHashAgainstTarget(hash, target) {

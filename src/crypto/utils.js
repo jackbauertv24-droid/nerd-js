@@ -84,9 +84,12 @@ export function difficultyToTarget(difficulty) {
 }
 
 export function checkHashAgainstTarget(hash, target) {
+    // Hash comes from SHA-256 output as big-endian, reverse to get Bitcoin little-endian
+    const hashLE = Buffer.from(hash).reverse();
+    
     for (let i = 0; i < 32; i++) {
-        if (hash[i] < target[i]) return true;
-        if (hash[i] > target[i]) return false;
+        if (hashLE[i] < target[i]) return true;
+        if (hashLE[i] > target[i]) return false;
     }
     return true;
 }

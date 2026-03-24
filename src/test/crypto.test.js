@@ -76,11 +76,11 @@ console.log('Expected approx:', expectedDiffTarget);
 console.log('\nTest 5: Hash comparison (valid block)');
 console.log('--------------------------------------');
 
-const blockHash = Buffer.from(hash).reverse();
+// checkHashAgainstTarget automatically reverses from SHA256 BE to Bitcoin LE
 const blockTarget = bitsToTarget(genesisBlock.bits);
-console.log('Block hash:', blockHash.toString('hex'));
+console.log('Block hash:', Buffer.from(hash).reverse().toString('hex'));
 console.log('Target:', blockTarget.toString('hex').padStart(64, '0'));
-console.log('Hash < Target (valid block):', checkHashAgainstTarget(blockHash, blockTarget) ? '✓ PASS' : '✗ FAIL');
+console.log('Hash < Target (valid block):', checkHashAgainstTarget(hash, blockTarget) ? '✓ PASS' : '✗ FAIL');
 
 // Test 6: Share difficulty calculation
 console.log('\nTest 6: Low difficulty share finding');
@@ -91,6 +91,6 @@ const lowDiffTarget = difficultyToTarget(0.0001);
 console.log('Pool difficulty 0.0001 target:', lowDiffTarget.toString('hex').padStart(64, '0'));
 
 // Check if genesis block hash would be a valid share at this difficulty
-console.log('Genesis hash < pool target:', checkHashAgainstTarget(blockHash, lowDiffTarget) ? 'YES (valid share)' : 'NO');
+console.log('Genesis hash < pool target:', checkHashAgainstTarget(hash, lowDiffTarget) ? 'YES (valid share)' : 'NO');
 
 console.log('\n=== Tests Complete ===');

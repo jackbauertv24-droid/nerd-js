@@ -2,78 +2,86 @@
 
 ## Problem
 
-Shares consistently rejected with "Difficulty too low" error despite local difficulty calculation showing shares exceed pool minimum (e.g., 0.002 > 0.0001).
+Shares consistently rejected with "Difficulty too low" error despite local difficulty calculation showing shares exceed pool minimum.
 
-## Root Cause Identified
+## Reference Implementation
 
-**Nonce byte order bug** - The nonce was being written in little-endian format when it should be big-endian in the block header.
+**Working Miner**: [montyanderson/miner.js](https://github.com/montyanderson/miner.js)
 
-## Findings
+A simple, working stratum Bitcoin miner in JavaScript that achieves ~400 KH/s on antpool.com.
 
-### 1. Worker Syntax Fix
+### Key Findings from Reference
 
-Fixed merge conflict markers in `src/mining/worker.js` that broke the code:
+| Operation | Code | Format |
+|-----------|------|--------|
+| Write nonce to block header | `block_header.writeUInt32LE(nonce, block_header.length - 4)` | **Little-endian** |
+| Extract nonce for submission | `block_header.slice(block_header.length - 4).toString("hex")` | Direct LE bytes → hex |
+
+**Critical**: The reference uses **little-endian** for everything. The nonce is written as LE in the block header, and extracted directly as LE bytes for submission - no byte swapping needed.
+
+## Root Causes Identified
+
+### Issue 1: Nonce Hex Conversion (WRONG)
+
+**Location**: `src/mining/worker.js` line 76-79
+
+**Problem**: nonceToHex was using `writeUInt32BE` which produces big-endian hex, but the pool expects little-endian.
+
 ```javascript
-// Removed broken conflict markers
-<<<<<<< HEAD
-=======
->>>>>>> de206fb99a95235fba7a6952b342fce8a80632f1
+// BEFORE (wrong) - produced BE hex
+function nonceToHex(nonce) {
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32BE(nonce, 0);  // WRONG
+    return buf.toString('hex');
+}
+
+// AFTER (correct) - produces LE hex matching the header
+function nonceToHex(nonce) {
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32LE(nonce, 0);  // CORRECT
+    return buf.toString('hex');
+}
 ```
 
-### 2. ntime Submission Fix
+### Issue 2: ntime Submission (WRONG)
 
-**Issue**: The miner was sending current timestamp instead of original job ntime.
+**Location**: `src/miner.js` line 222-228
 
-**Problem**: When the pool reconstructs the block to verify the share, it uses the original job ntime (from mining.notify). Sending a different ntime causes hash mismatch.
+**Problem**: Using current timestamp instead of original job ntime. When pool reconstructs the block, it uses the original ntime from the job.
 
-**Fix** (`src/miner.js`):
 ```javascript
-// Before (incorrect)
+// BEFORE (wrong)
 const currentNtime = Math.floor(Date.now() / 1000);
 const result = await this.stratumClient.submit(job.jobId, job.extranonce2, currentNtime, nonceHex);
 
-// After (correct)
+// AFTER (correct)
 const result = await this.stratumClient.submit(job.jobId, job.extranonce2, job.ntime, nonceHex);
 ```
 
-### 3. Job Object Update
+## Bitcoin Block Header Specification (from en.bitcoin.it/wiki/Block_hashing_algorithm)
 
-Added `ntime` to job storage (`src/mining/job.js`):
-```javascript
-this.currentJob = {
-    ...miningJob,
-    target: target,
-    nbits: stratumJob.nbits,
-    ntime: stratumJob.ntime,  // Added this line
-};
-```
+All 80-byte block header fields are stored as **little-endian**:
+- Version: 4 bytes LE
+- PrevHash: 32 bytes LE
+- MerkleRoot: 32 bytes LE
+- Time (ntime): 4 bytes LE
+- Bits (nbits): 4 bytes LE
+- Nonce: 4 bytes LE
 
-### 4. Critical Discovery: Nonce Byte Order Bug
+## Files Modified
 
-**Genesis Block Testing** revealed the nonce is stored in **big-endian** format in the block header, not little-endian.
+| File | Change |
+|------|--------|
+| `src/mining/worker.js` | Fixed nonceToHex: writeUInt32BE → writeUInt32LE |
+| `src/miner.js` | Fixed ntime: current timestamp → job.ntime |
 
-#### Test Case
-```javascript
-// Genesis block has nonce 0x1dac2b7c at offset 76
-const nonce = 0x1dac2b7c;
+## Previous Wrong Assumption
 
-// WRONG (current implementation):
-header.writeUInt32LE(nonce, 76);  // produces 7c2bac1d at offset 76
+The earlier debug session incorrectly concluded nonce should be big-endian based on genesis block analysis. This was WRONG because:
 
-// CORRECT:
-header.writeUInt32BE(nonce, 76);  // produces 1dac2b7c at offset 76
-```
-
-#### Files Needing Fix
-
-| File | Location | Current (Wrong) | Should Be |
-|------|----------|-----------------|-----------|
-| `src/mining/worker.js` | `last16Buffer.writeUInt32LE(nonce, 12)` | LE | BE |
-| `src/mining/block.js` | `uint32LE(nonce)` in `buildBlockHeader` | LE | BE |
-
-#### Why This Matters
-
-The nonce at offset 76 in the 80-byte block header must match what the pool expects. Wrong byte order produces a different hash, causing rejection as "Difficulty too low".
+1. Genesis block displays nonce as `1dac2b7c` in big-endian display format
+2. But in the actual 80-byte header stored in memory, it's stored as little-endian bytes `7c,2b,ac,1d`
+3. The working reference implementation confirms this - it uses LE throughout
 
 ## Verified Working Components
 
@@ -81,35 +89,9 @@ The nonce at offset 76 in the 80-byte block header must match what the pool expe
 - Midstate optimization produces correct hashes
 - Difficulty calculation returns correct values
 - Target conversion (bits → target) works correctly
-- Share difficulty check passes locally
-
-## Working Commit Reference
-
-Commit `5b164a2` was the last known working version. It fixed the original "Difficulty too low" by not reversing version/ntime/nbits since they're already sent as little-endian by stratum.
-
-## Files Modified (This Session)
-
-| File | Change |
-|------|--------|
-| `src/miner.js` | Use original job ntime for submission |
-| `src/mining/job.js` | Store ntime in job object |
-| `src/mining/worker.js` | Remove merge conflict markers |
-| `src/stratum/client.js` | Cleanup |
-
-## Debug/Test Files Created
-
-| File | Purpose |
-|------|---------|
-| `test-genesis.mjs` | Genesis block hash verification |
-| `test-byte-order.js` | Nonce byte order testing |
-| `test-block.mjs` | Block construction testing |
-| `test-merkle.mjs` | Merkle root calculation |
-| `verify-current-implementation.js` | Current code verification |
-| `debug-genesis-correct.js` | Correct genesis implementation |
 
 ## Next Steps
 
-1. **Fix nonce byte order**: Change `writeUInt32LE` → `writeUInt32BE` in worker.js and block.js
-2. **Verify with genesis block**: Test produces correct genesis block hash
-3. **Test against pool**: Submit shares and verify acceptance
-4. **DO NOT** change anything else until this is verified working
+1. Test against pool with these fixes
+2. Verify shares are accepted
+3. DO NOT change byte order further without reference implementation confirmation

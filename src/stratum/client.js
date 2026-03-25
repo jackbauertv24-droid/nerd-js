@@ -31,6 +31,7 @@ export class StratumClient extends EventEmitter {
         this.difficulty = 0.0001;
         
         this.pendingRequests = new Map();
+        this.requestTimeout = 30000;
     }
     
     connect() {
@@ -62,6 +63,7 @@ export class StratumClient extends EventEmitter {
             this.socket.on('close', () => {
                 this.connected = false;
                 this.authorized = false;
+                this.clearPendingRequests(new Error('Connection closed'));
                 this.emit('disconnected');
             });
         });
@@ -85,7 +87,8 @@ export class StratumClient extends EventEmitter {
         if (!msg) return;
         
         if (msg.id !== undefined && this.pendingRequests.has(msg.id)) {
-            const { resolve } = this.pendingRequests.get(msg.id);
+            const { resolve, timeout } = this.pendingRequests.get(msg.id);
+            clearTimeout(timeout);
             this.pendingRequests.delete(msg.id);
             resolve(msg);
             return;
@@ -106,8 +109,13 @@ export class StratumClient extends EventEmitter {
     }
     
     send(msg) {
-        return new Promise((resolve) => {
-            this.pendingRequests.set(msg.id, { resolve });
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                this.pendingRequests.delete(msg.id);
+                reject(new Error(`Request ${msg.id} timed out`));
+            }, this.requestTimeout);
+
+            this.pendingRequests.set(msg.id, { resolve, reject, timeout });
             this.socket.write(serializeMessage(msg));
         });
     }
@@ -146,18 +154,31 @@ export class StratumClient extends EventEmitter {
         const workerName = this.wallet;
         const msg = buildSubmit(workerName, jobId, extranonce2, ntime, nonce);
         const response = await this.send(msg);
-        
+
+        if (!response) {
+            return { accepted: false, error: 'No response from pool' };
+        }
+
         if (response.result === true) {
             return { accepted: true };
         } else {
-            return { 
-                accepted: false, 
-                error: response.error 
+            return {
+                accepted: false,
+                error: response.error || 'Unknown error'
             };
         }
     }
     
+    clearPendingRequests(error) {
+        for (const [id, request] of this.pendingRequests) {
+            clearTimeout(request.timeout);
+            request.reject(error);
+        }
+        this.pendingRequests.clear();
+    }
+
     disconnect() {
+        this.clearPendingRequests(new Error('Disconnecting'));
         if (this.socket) {
             this.socket.destroy();
             this.socket = null;

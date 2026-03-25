@@ -1,6 +1,8 @@
 import { doubleSHA256 } from '../crypto/sha256.js';
 import { uint32LE } from '../crypto/utils.js';
 
+// PrevHash: stratum sends as 8 x 4-byte words in big-endian byte order, we need to reverse
+// each 4-byte word to get little-endian for block header storage
 function wordSwap4(buf) {
     const result = Buffer.from(buf);
     for (let i = 0; i < result.length; i += 4) {
@@ -41,7 +43,7 @@ export function buildBlockHeader(version, prevHash, merkleRoot, ntime, nbits, no
     // Version: 4 bytes, stratum sends big-endian, need little-endian for block header
     const versionBuf = Buffer.from(version, 'hex').reverse();
     
-    // PrevHash: 32 bytes, convert from hex and 4-byte word swap
+    // PrevHash: 32 bytes, stratum sends as 8x 4-byte words in big-endian, reverse each 4-byte word for little-endian block storage
     const prevHashBuf = wordSwap4(Buffer.from(prevHash, 'hex'));
     
     // MerkleRoot: 32 bytes, use directly (from SHA256, already in correct little-endian format)

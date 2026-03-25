@@ -219,10 +219,12 @@ export class Miner {
             const job = this.jobManager.getCurrentJob();
             if (job) {
                 try {
+                    // Update ntime to current Unix timestamp (seconds) as required by most pools
+                    const currentNtime = Math.floor(Date.now() / 1000);
                     const result = await this.stratumClient.submit(
                         job.jobId,
                         job.extranonce2,
-                        parseInt(job.ntime, 16),
+                        currentNtime,
                         nonceHex
                     );
                     

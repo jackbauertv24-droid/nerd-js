@@ -1,105 +1,175 @@
-# NerdJS Debug Session - March 25, 2026
+# NerdJS Debug Session - Share Rejection Issue
 
 ## Problem
+Shares are being rejected by public-pool.io with "Difficulty too low" error, despite local difficulty calculation showing shares meet/exceed pool minimum (e.g., 0.0014 > 0.0001).
 
-Shares consistently rejected with "Difficulty too low" error.
+## Summary
+After extensive debugging, the root cause is still unknown. The pool computes a different hash than our local computation when verifying submissions.
 
-## Reference Implementations Used
+---
 
-### 1. Bitcoin Wiki - Block Hashing Algorithm
-**URL**: en.bitcoin.it/wiki/Block_hashing_algorithm
+## Verified Working Components
 
-All fields in the 80-byte Bitcoin block header are stored as **big-endian (BE)** bytes.
+### Crypto Implementation ✓
+- Genesis block hash verification passes
+- Block 125552 hash verification passes
+- Midstate optimization produces correct hashes
+- All crypto tests pass
 
-### 2. Working Miner Reference
-**URL**: github.com/montyanderson/miner.js
+### Worker Mining ✓
+- Finds shares with difficulty > pool minimum
+- Correctly computes hash locally
+- Submits with correct jobId
 
-A working stratum Bitcoin miner achieving ~400 KH/s on antpool.com.
+---
 
-## Root Cause Identified
+## Code Changes Made
 
-**Nonce byte order was wrong** - The nonce was being written as little-endian (LE) but Bitcoin block headers require big-endian (BE) format for all fields.
+### 1. Merkle Branch Handling
+**File**: `src/mining/block.js`
 
-### Evidence from Genesis Block
-
-| Nonce in Header | Format | Produces Correct Hash? |
-|-----------------|--------|----------------------|
-| `7c2bac1d` | LE (wrong) | ❌ No |
-| `1dac2b7c` | BE (correct) | ✅ Yes |
-
-### Evidence from Block 125552
-
-| Nonce in Header | Format | Produces Correct Hash? |
-|-----------------|--------|----------------------|
-| `9546a142` | LE (wrong) | ❌ No |
-| `42a14695` | BE (correct) | ✅ Yes |
-
-## Fixes Applied
-
-### 1. worker.js - Nonce in Block Header
+Changed to NOT reverse merkle branch hashes (matching montyanderson/miner.js):
 ```javascript
-// BEFORE (wrong)
-last16Buffer.writeUInt32LE(nonce, 12);
+// Before (wrong):
+const branchBuf = Buffer.from(branch, 'hex').reverse();
 
-// AFTER (correct)
-last16Buffer.writeUInt32BE(nonce, 12);
+// After (correct):
+const branchBuf = Buffer.from(branch, 'hex');
 ```
 
-### 2. worker.js - Nonce to Hex for Submission
-```javascript
-// BEFORE (wrong)
-buf.writeUInt32LE(nonce, 0);
+### 2. Worker Nonce Submission
+**File**: `src/mining/worker.js`
 
-// AFTER (correct)  
-buf.writeUInt32BE(nonce, 0);
+Nonce hex conversion uses LE format (matching NerdMiner_v2):
+```javascript
+function nonceToHex(nonce) {
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32LE(nonce, 0);  // LE format
+    return buf.toString('hex');
+}
 ```
 
-### 3. block.js - Nonce in Header Construction
-```javascript
-// BEFORE (wrong)
-const nonceBuf = uint32LE(nonce);
+### 3. Job ID Handling
+**File**: `src/miner.js`
 
-// AFTER (correct)
-const nonceBuf = uint32BE(nonce);
+Fixed to use the worker's jobId for submission:
+```javascript
+const { jobId: workerJobId } = msg.data;
+// ...
+const submitJobId = job.jobId === workerJobId ? job.jobId : workerJobId;
 ```
 
-### 4. miner.js - ntime for Submission
-```javascript
-// BEFORE (wrong)
-const currentNtime = Math.floor(Date.now() / 1000);
-result = await stratumClient.submit(..., currentNtime, nonceHex);
+---
 
-// AFTER (correct)
-result = await stratumClient.submit(..., job.ntime, nonceHex);
+## What Was Tested
+
+### Byte Order (BE vs LE)
+- **BE**: Nonce written as BE in header, genesis block hash passes
+- **LE**: Used in NerdMiner_v2 submission format
+- Both approaches produce "Difficulty too low" error
+
+### Pool Tests
+- **public-pool.io:21496**: Fails with "Difficulty too low"
+- **solo.ckpool.org:3333**: Connects but requires very high difficulty (10000)
+
+### Reference Implementations
+1. **NerdMiner_v2** (BitMaker-hub/NerdMiner_v2)
+   - Works with public-pool.io
+   - Uses `__builtin_bswap32(nonce)` for header
+   - Submits `String(nonce, HEX)` (LE on ESP32)
+
+2. **montyanderson/miner.js**
+   - Works on antpool.com
+   - Reverses ALL header fields (version, prevhash, merkle, ntime, nbits)
+   - Uses LE for nonce
+   - Does NOT reverse merkle branch hashes
+
+---
+
+## Debug Output Examples
+
+### Submission Data
 ```
+[SUBMIT] Submitting:
+  workerJobId: 48d11d5
+  currentJobId: 48d11d5
+  using jobId: 48d11d5
+  extranonce2: 00000000
+  ntime: 69c3acab
+  nonce: 4efd0000
+
+✗ Share rejected: [23,"Difficulty too low",""]
+```
+
+### Hash Verification
+```
+Expected diff: 0.00025767
+Pool Difficulty: 0.0001
+Pool still rejects with "Difficulty too low"
+```
+
+---
+
+## Current Implementation State
+
+### Block Header Construction
+- Version: Direct from stratum (no reversal)
+- PrevHash: Word-swap 4-byte groups
+- MerkleRoot: Direct from computeMerkleRoot
+- Ntime: Direct from stratum
+- Nbits: Direct from stratum
+- Nonce: BE in header
+
+### Submission Format
+- jobId: Matched to worker
+- extranonce2: Incremented per share
+- ntime: From job
+- nonce: LE hex string
+
+---
+
+## Open Questions
+
+1. **Why does the pool compute a different hash?**
+   - Our hash computation is verified correct against known blocks
+   - The pool must be reconstructing the block differently
+
+2. **Is there a subtle byte order issue?**
+   - We've tested BE and LE extensively
+   - NerdMiner_v2 works with public-pool.io
+
+3. **Is public-pool.io using a non-standard protocol?**
+   - Could have specific requirements not in Stratum V1 spec
+
+---
+
+## Test Commands
+
+```bash
+# Run miner
+node src/index.js -w bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu
+
+# Run tests
+npm test
+```
+
+---
+
+## Next Steps Suggestions
+
+1. Try a different mining pool (btc.com, antpool) to isolate if issue is pool-specific
+2. Compare exact submission with NerdMiner_v2 (add debug logging to both)
+3. Check public-pool.io documentation for any specific requirements
+4. Consider implementing full LE approach like montyanderson/miner.js
+
+---
 
 ## Files Modified
 
-| File | Change |
-|------|--------|
-| `src/mining/worker.js` | writeUInt32LE → writeUInt32BE for nonce |
-| `src/mining/block.js` | uint32LE → uint32BE for nonce |
-| `src/miner.js` | Use job.ntime instead of current timestamp |
+- `src/mining/block.js` - Merkle branch handling
+- `src/mining/worker.js` - Nonce to hex conversion
+- `src/miner.js` - Job ID handling
 
-## Test Verification
+---
 
-Created `src/test/block-verify.test.js` with known block data:
-
-- Genesis Block (Block 0) - verified against blockchain.info
-- Block 125552 - verified against Bitcoin Wiki example
-- Nonce byte order verification against specification
-
-All tests pass:
-```
-✓ Test 1: Genesis block hash
-✓ Test 2: Block 125552 hash  
-✓ Test 3: Nonce byte order (BE is correct)
-✓ Test 4: buildBlockHeader function
-```
-
-## Key Finding
-
-All 4-byte fields in Bitcoin block header (version, ntime, nbits, nonce) must be stored as **big-endian** bytes. This was confirmed by:
-1. Computing hash of genesis block with different nonce formats
-2. Computing hash of block 125552 with different nonce formats
-3. Verifying against Bitcoin Wiki specification
+*Last updated: 2026-03-25*

@@ -31,7 +31,7 @@ export function computeMerkleRoot(coinbaseTx, merkleBranch) {
     hash = hash.reverse();
     
     for (const branch of merkleBranch) {
-        const branchBuf = Buffer.from(branch, 'hex').reverse();
+        const branchBuf = Buffer.from(branch, 'hex');
         const combined = Buffer.concat([hash, branchBuf]);
         hash = doubleSHA256(combined).reverse();
     }

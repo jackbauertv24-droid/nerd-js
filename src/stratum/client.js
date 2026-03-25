@@ -145,6 +145,7 @@ export class StratumClient extends EventEmitter {
     async submit(jobId, extranonce2, ntime, nonce) {
         const workerName = this.wallet;
         const msg = buildSubmit(workerName, jobId, extranonce2, ntime, nonce);
+        
         const response = await this.send(msg);
         
         if (response.result === true) {

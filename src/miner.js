@@ -208,7 +208,7 @@ export class Miner {
     
     async handleWorkerMessage(msg, worker, workerId) {
         if (msg.type === 'share') {
-            const { nonceHex, difficulty, jobId } = msg.data;
+            const { nonceHex, difficulty, jobId: workerJobId } = msg.data;
             
             this.stats.shares++;
             
@@ -218,13 +218,17 @@ export class Miner {
             
             const job = this.jobManager.getCurrentJob();
             if (job) {
+                const submitJobId = job.jobId === workerJobId ? job.jobId : workerJobId;
+                
                 try {
                     const result = await this.stratumClient.submit(
-                        job.jobId,
+                        submitJobId,
                         job.extranonce2,
                         job.ntime,
                         nonceHex
                     );
+                    
+                    job.extranonce2 = incrementExtranonce2(job.extranonce2);
                     
                     job.extranonce2 = incrementExtranonce2(job.extranonce2);
                     

@@ -1,5 +1,5 @@
 import { doubleSHA256 } from '../crypto/sha256.js';
-import { uint32LE } from '../crypto/utils.js';
+import { uint32BE } from '../crypto/utils.js';
 
 // PrevHash: stratum sends as 8 x 4-byte words in big-endian byte order, we need to reverse
 // each 4-byte word to get little-endian for block header storage
@@ -55,8 +55,8 @@ export function buildBlockHeader(version, prevHash, merkleRoot, ntime, nbits, no
     // Nbits: 4 bytes, stratum sends already in little-endian hex, no reversal needed
     const nbitsBuf = Buffer.from(nbits, 'hex');
     
-    // Nonce: 4 bytes, write as little-endian directly
-    const nonceBuf = uint32LE(nonce);
+    // Nonce: 4 bytes, write as big-endian (Bitcoin header format)
+    const nonceBuf = uint32BE(nonce);
     
     return Buffer.concat([
         versionBuf,

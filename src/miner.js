@@ -219,12 +219,12 @@ export class Miner {
             const job = this.jobManager.getCurrentJob();
             if (job) {
                 try {
-                    // Use the original ntime from the job (not current timestamp)
-                    // The pool reconstructs the block using the job's original ntime
+                    // Update ntime to current Unix timestamp (seconds) as required by most pools
+                    const currentNtime = Math.floor(Date.now() / 1000);
                     const result = await this.stratumClient.submit(
                         job.jobId,
                         job.extranonce2,
-                        job.ntime,
+                        currentNtime,
                         nonceHex
                     );
                     

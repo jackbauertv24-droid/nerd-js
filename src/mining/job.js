@@ -37,6 +37,7 @@ export class JobManager {
             ...miningJob,
             target: target,
             nbits: stratumJob.nbits,
+            ntime: stratumJob.ntime,
             cleanJobs: stratumJob.cleanJobs,
             merkleBranch: stratumJob.merkleBranch,
             coinb1: stratumJob.coinb1,

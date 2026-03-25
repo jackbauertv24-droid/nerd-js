@@ -31,11 +31,7 @@ function mine(data) {
         
         if (checkHashAgainstTarget(hash, target)) {
             const diff = calculateShareDifficulty(hash);
-<<<<<<< HEAD
             
-=======
-
->>>>>>> de206fb99a95235fba7a6952b342fce8a80632f1
             parentPort.postMessage({
                 type: 'share',
                 data: {

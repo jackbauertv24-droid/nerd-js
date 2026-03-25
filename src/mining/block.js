@@ -25,33 +25,35 @@ export function buildCoinbase(coinb1, extranonce1, extranonce2, coinb2) {
 
 export function computeMerkleRoot(coinbaseTx, merkleBranch) {
     let hash = doubleSHA256(coinbaseTx);
+    // doubleSHA256 gives big-endian, reverse to little-endian for next step
+    hash = hash.reverse();
     
     for (const branch of merkleBranch) {
-        const branchBuf = Buffer.from(branch, 'hex');
+        const branchBuf = Buffer.from(branch, 'hex').reverse();
         const combined = Buffer.concat([hash, branchBuf]);
-        hash = doubleSHA256(combined);
+        hash = doubleSHA256(combined).reverse();
     }
     
     return hash;
 }
 
 export function buildBlockHeader(version, prevHash, merkleRoot, ntime, nbits, nonce) {
-    // Version: 4 bytes, convert from hex and reverse (LE)
+    // Version: 4 bytes, stratum sends big-endian, need little-endian for block header
     const versionBuf = Buffer.from(version, 'hex').reverse();
     
     // PrevHash: 32 bytes, convert from hex and 4-byte word swap
     const prevHashBuf = wordSwap4(Buffer.from(prevHash, 'hex'));
     
-    // MerkleRoot: 32 bytes, use directly (from SHA256, already in correct format)
+    // MerkleRoot: 32 bytes, use directly (from SHA256, already in correct little-endian format)
     const merkleRootBuf = merkleRoot;
     
-    // Ntime: 4 bytes, convert from hex and reverse (LE)
+    // Ntime: 4 bytes, stratum sends big-endian, need little-endian for block header
     const ntimeBuf = Buffer.from(ntime, 'hex').reverse();
     
-    // Nbits: 4 bytes, convert from hex and reverse (LE)
+    // Nbits: 4 bytes, stratum sends big-endian, need little-endian for block header
     const nbitsBuf = Buffer.from(nbits, 'hex').reverse();
     
-    // Nonce: 4 bytes, write as LE
+    // Nonce: 4 bytes, write as little-endian directly
     const nonceBuf = uint32LE(nonce);
     
     return Buffer.concat([

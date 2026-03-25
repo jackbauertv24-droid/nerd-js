@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { StratumClient } from './stratum/client.js';
 import { JobManager } from './mining/job.js';
+import { incrementExtranonce2 } from './mining/block.js';
 import { logInfo, logSuccess, logError, logWarning, logShare, logJob, logConnection, logAuthorized, logDifficulty } from './utils/logger.js';
 import { displayStats } from './utils/display.js';
 
@@ -224,6 +225,8 @@ export class Miner {
                         parseInt(job.ntime, 16),
                         nonceHex
                     );
+                    
+                    job.extranonce2 = incrementExtranonce2(job.extranonce2);
                     
                     if (result.accepted) {
                         logShare(difficulty, true);

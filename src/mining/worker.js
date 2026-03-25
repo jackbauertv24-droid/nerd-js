@@ -32,7 +32,6 @@ function mine(data) {
         
         if (checkHashAgainstTarget(hash, target)) {
             const diff = calculateShareDifficulty(hash);
-            const nonceHex = bufferToHex(Buffer.alloc(4).fill(nonce, 0, 4, 'hex') || uint32LEToHex(nonce));
             
             parentPort.postMessage({
                 type: 'share',
@@ -77,11 +76,5 @@ function mine(data) {
 function nonceToHex(nonce) {
     const buf = Buffer.alloc(4);
     buf.writeUInt32LE(nonce, 0);
-    return buf.toString('hex');
-}
-
-function uint32LEToHex(n) {
-    const buf = Buffer.alloc(4);
-    buf.writeUInt32LE(n, 0);
     return buf.toString('hex');
 }

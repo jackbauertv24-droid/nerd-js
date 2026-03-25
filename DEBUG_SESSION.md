@@ -80,11 +80,48 @@ Despite these fixes, shares are still rejected with "Difficulty too low". This i
 - `src/mining/job.js` - Store ntime in job object  
 - `src/mining/worker.js` - Remove merge conflict markers
 
+## 4. Critical Discovery: Nonce Byte Order Bug
+
+**Genesis Block Testing** revealed the nonce is stored in **big-endian** format in the block header, not little-endian.
+
+### Test Case
+```javascript
+// Genesis block has nonce 0x1dac2b7c at offset 76
+const genesis = Buffer.from('...1dac2b7c', 'hex');
+const nonce = 0x1dac2b7c;
+
+// WRONG (current implementation):
+header.writeUInt32LE(nonce, 76);  // produces 7c2bac1d at offset 76
+
+// CORRECT:
+header.writeUInt32BE(nonce, 76);  // produces 1dac2b7c at offset 76
+```
+
+### Files Needing Fix
+
+| File | Location | Current (Wrong) | Should Be |
+|------|----------|-----------------|-----------|
+| `src/mining/worker.js` | `last16Buffer.writeUInt32LE(nonce, 12)` | LE | BE |
+| `src/mining/block.js` | `uint32LE(nonce)` in `buildBlockHeader` | LE | BE |
+
+### Why This Matters
+
+The nonce at offset 76 in the 80-byte block header must match what the pool expects. Writing it in wrong byte order produces a different hash, causing the pool to reject shares as "Difficulty too low" because the reconstructed hash doesn't match the submitted hash.
+
+## Working Commit Reference
+
+Commit `5b164a2` was the last known working version. It fixed the original "Difficulty too low" by not reversing version/ntime/nbits since they're already sent as little-endian by stratum.
+
+## Files Modified (This Session)
+
+- `src/miner.js` - Use original job ntime for submission
+- `src/mining/job.js` - Store ntime in job object  
+- `src/mining/worker.js` - Remove merge conflict markers
+- `src/stratum/client.js` - Cleanup
+
 ## Next Steps
 
-To isolate the remaining issue:
-
-1. Create a test that uses a known-working job from a successful NerdMiner
-2. Log all submitted parameters to compare with reference
-3. Test with a different mining pool (e.g., pool.nerdminers.org)
-4. Verify block header byte order against Stratum V1 specification
+1. **Fix nonce byte order**: Change `writeUInt32LE` → `writeUInt32BE` in worker.js and block.js
+2. **Verify with genesis block**: Test produces correct genesis block hash
+3. **Test against pool**: Submit shares and verify acceptance
+4. **DO NOT** change anything else until this is verified working

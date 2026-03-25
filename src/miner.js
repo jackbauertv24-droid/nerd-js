@@ -240,12 +240,6 @@ export class Miner {
                 } catch (err) {
                     logError(`Submit failed: ${err.message}`);
                     this.stats.rejectedShares++;
-                } finally {
-                    this.stopWorkers();
-                    const newJob = this.jobManager.regenerateCurrentJob();
-                    if (newJob && this.running) {
-                        this.startWorkers(newJob);
-                    }
                 }
             }
         } else if (msg.type === 'progress') {

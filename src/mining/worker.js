@@ -22,6 +22,7 @@ function mine(data) {
     const midstate = computeMidstate(first64);
     
     const last16Buffer = Buffer.from(last16);
+    const hashCount = 0;
     const startTime = Date.now();
     
     for (let nonce = nonceStart; nonce < nonceEnd && running; nonce++) {
@@ -73,8 +74,6 @@ function mine(data) {
 }
 
 function nonceToHex(nonce) {
-    // When submitting to stratum, nonce needs to be big-endian hex (display order)
-    // Even though it's stored little-endian in the block header
     const buf = Buffer.alloc(4);
     buf.writeUInt32BE(nonce, 0);
     return buf.toString('hex');

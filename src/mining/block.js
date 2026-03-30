@@ -38,12 +38,9 @@ export function computeMerkleRoot(coinbaseTx, merkleBranch) {
 }
 
 export function buildBlockHeader(version, prevHash, merkleRoot, ntime, nbits, nonce) {
-    // Stratum V1 sends version/prevHash/ntime/nbits as big-endian hex strings
-    // Bitcoin block header stores them as little-endian - must reverse all
-    
     const versionBuf = Buffer.from(version, 'hex').reverse();
-    const prevHashBuf = Buffer.from(prevHash, 'hex').reverse();
-    const merkleRootBuf = Buffer.from(merkleRoot).reverse();
+    const prevHashBuf = wordSwap4(Buffer.from(prevHash, 'hex'));
+    const merkleRootBuf = Buffer.from(merkleRoot);
     const ntimeBuf = Buffer.from(ntime, 'hex').reverse();
     const nbitsBuf = Buffer.from(nbits, 'hex').reverse();
     const nonceBuf = uint32LE(nonce);

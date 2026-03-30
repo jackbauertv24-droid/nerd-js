@@ -75,6 +75,6 @@ function mine(data) {
 
 function nonceToHex(nonce) {
     const buf = Buffer.alloc(4);
-    buf.writeUInt32LE(nonce, 0);
+    buf.writeUInt32BE(nonce, 0);
     return buf.toString('hex');
 }

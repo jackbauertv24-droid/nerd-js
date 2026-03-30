@@ -89,14 +89,12 @@ export function difficultyToTarget(difficulty) {
 }
 
 export function checkHashAgainstTarget(hash, target) {
-    // doubleSHA256 output is big-endian (MSB first)
-    // target from difficultyToTarget is little-endian (LSB first)
-    // Reverse hash to LE for byte-by-byte comparison
-    const hashLE = Buffer.from(hash).reverse();
-    
+    // doubleSHA256 output is LE layout (byte 0 = LSB, byte 31 = MSB)
+    // target from bitsToTarget/difficultyToTarget is also LE
+    // Both have MSB at index 31, so compare directly without reversal
     for (let i = 31; i >= 0; i--) {
-        if (hashLE[i] < target[i]) return true;
-        if (hashLE[i] > target[i]) return false;
+        if (hash[i] < target[i]) return true;
+        if (hash[i] > target[i]) return false;
     }
     return true;
 }
@@ -108,9 +106,10 @@ export function hashToBigEndian(hash) {
 export function calculateShareDifficulty(hash) {
     const TRUE_DIFF_ONE = BigInt('0x00000000ffff0000000000000000000000000000000000000000000000000000');
     
-    // doubleSHA256 output is big-endian, Buffer.toString('hex') preserves buffer order
-    // For BE buffer, toString('hex') gives correct hex for BigInt (MSB first)
-    const hashBig = BigInt('0x' + Buffer.from(hash).toString('hex') || '0');
+    // doubleSHA256 output is LE layout (byte 0 = LSB)
+    // BigInt('0x' + hex) interprets byte 0 as MSB
+    // Must reverse LE hash to BE hex for correct BigInt interpretation
+    const hashBig = BigInt('0x' + Buffer.from(hash).reverse().toString('hex') || '0');
     
     if (hashBig === 0n) {
         return 0;

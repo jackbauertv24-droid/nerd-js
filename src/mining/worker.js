@@ -26,7 +26,7 @@ function mine(data) {
     const startTime = Date.now();
     
     for (let nonce = nonceStart; nonce < nonceEnd && running; nonce++) {
-        last16Buffer.writeUInt32BE(nonce, 12);
+        last16Buffer.writeUInt32LE(nonce, 12);
         
         const hash = doubleSHA256FromMidstate(midstate, last16Buffer);
         

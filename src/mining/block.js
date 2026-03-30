@@ -1,5 +1,5 @@
 import { doubleSHA256 } from '../crypto/sha256.js';
-import { uint32BE } from '../crypto/utils.js';
+import { uint32LE } from '../crypto/utils.js';
 
 // PrevHash: stratum sends as 8 x 4-byte words in big-endian byte order, we need to reverse
 // each 4-byte word to get little-endian for block header storage
@@ -27,36 +27,26 @@ export function buildCoinbase(coinb1, extranonce1, extranonce2, coinb2) {
 
 export function computeMerkleRoot(coinbaseTx, merkleBranch) {
     let hash = doubleSHA256(coinbaseTx);
-    // doubleSHA256 gives big-endian, reverse to little-endian for next step
-    hash = hash.reverse();
     
     for (const branch of merkleBranch) {
         const branchBuf = Buffer.from(branch, 'hex');
         const combined = Buffer.concat([hash, branchBuf]);
-        hash = doubleSHA256(combined).reverse();
+        hash = doubleSHA256(combined);
     }
     
     return hash;
 }
 
 export function buildBlockHeader(version, prevHash, merkleRoot, ntime, nbits, nonce) {
-    // Version: 4 bytes, stratum sends already in little-endian hex, no reversal needed
-    const versionBuf = Buffer.from(version, 'hex');
+    // Stratum V1 sends version/prevHash/ntime/nbits as big-endian hex strings
+    // Bitcoin block header stores them as little-endian - must reverse all
     
-    // Prevhash: 32 bytes, stratum sends as 8x 4-byte words in big-endian (display order), reverse each 4-byte word for little-endian block storage
-    const prevHashBuf = wordSwap4(Buffer.from(prevHash, 'hex'));
-    
-    // MerkleRoot: 32 bytes, use directly (from SHA256, already converted to correct little-endian format)
-    const merkleRootBuf = merkleRoot;
-    
-    // Ntime: 4 bytes, stratum sends already in little-endian hex, no reversal needed
-    const ntimeBuf = Buffer.from(ntime, 'hex');
-    
-    // Nbits: 4 bytes, stratum sends already in little-endian hex, no reversal needed
-    const nbitsBuf = Buffer.from(nbits, 'hex');
-    
-    // Nonce: 4 bytes, write as big-endian (Bitcoin header format)
-    const nonceBuf = uint32BE(nonce);
+    const versionBuf = Buffer.from(version, 'hex').reverse();
+    const prevHashBuf = Buffer.from(prevHash, 'hex').reverse();
+    const merkleRootBuf = Buffer.from(merkleRoot).reverse();
+    const ntimeBuf = Buffer.from(ntime, 'hex').reverse();
+    const nbitsBuf = Buffer.from(nbits, 'hex').reverse();
+    const nonceBuf = uint32LE(nonce);
     
     return Buffer.concat([
         versionBuf,

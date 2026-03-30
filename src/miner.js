@@ -230,8 +230,6 @@ export class Miner {
                     
                     job.extranonce2 = incrementExtranonce2(job.extranonce2);
                     
-                    job.extranonce2 = incrementExtranonce2(job.extranonce2);
-                    
                     if (result.accepted) {
                         logShare(difficulty, true);
                         this.stats.acceptedShares++;
